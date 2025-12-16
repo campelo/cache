@@ -22,7 +22,10 @@ public class RedisCacheService : ICacheService
         return success ? resultItem : default;
     }
 
-    public async Task SetAsync<TItem>(string key, TItem value, TimeSpan? absoluteExpirationRelativeToNow)
+    public async Task SetAsync<TItem>(string key, TItem value, TimeSpan? absoluteExpirationRelativeToNow) =>
+        await SetAsync(key, value, absoluteExpirationRelativeToNow, true);
+
+    public async Task SetAsync<TItem>(string key, TItem value, TimeSpan? absoluteExpirationRelativeToNow, bool keepTtl = true)
     {
         if (value == null)
         {
@@ -39,17 +42,16 @@ public class RedisCacheService : ICacheService
 
         // Check if key exists
         bool keyExists = await _redisDatabase.KeyExistsAsync(key);
+        var serializedValue = SerializeValue(value);
 
-        if (keyExists)
+        if (keyExists && keepTtl)
         {
-            var serializedValue = SerializeValue(value);
-            await _redisDatabase.StringSetAsync(key, serializedValue, keepTtl: true);
+            await _redisDatabase.StringSetAsync(key, serializedValue, keepTtl: keepTtl);
             return;
         }
 
         // Set value with expiration
-        var serialized = SerializeValue(value);
-        await _redisDatabase.StringSetAsync(key, serialized, absoluteExpirationRelativeToNow);
+        await _redisDatabase.StringSetAsync(key, serializedValue, absoluteExpirationRelativeToNow);
     }
 
     public Task SetAsync<TItem>(string key, TItem value) =>
