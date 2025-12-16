@@ -1,19 +1,42 @@
 using Cache.Options;
 using Cache.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<CacheOptions>(options =>
+// Load appsettings.json
+builder.Configuration
+    .SetBasePath(Directory.GetCurrentDirectory())
+    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+// Configure cache options from configuration
+builder.Services.Configure<CacheOptions>(builder.Configuration.GetSection("Cache"));
+
+// Configure Redis options from configuration
+builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection("Redis"));
+
+// Register cache service based on configuration
+var redisOptions = builder.Configuration.GetSection("Redis").Get<RedisOptions>() ?? new RedisOptions();
+
+if (redisOptions.UseRedis)
 {
-    options.CacheLifetime = "00:00:05";
-    options.CacheLifeTimeSpan = TimeSpan.FromMinutes(1);
-});
+    Console.WriteLine("=== Using Redis Cache ===\n");
 
-builder.Services.AddMemoryCache();
+    // Configure Redis connection
+    var redisConnection = ConnectionMultiplexer.Connect(redisOptions.ConnectionString);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+    builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+}
+else
+{
+    Console.WriteLine("=== Using Memory Cache ===\n");
 
-builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<ICacheService, MemoryCacheService>();
+}
 
 var host = builder.Build();
 
@@ -28,10 +51,14 @@ const string initialValue1 = "value1";
 const string initialValue2 = "value2";
 const string initialValue3 = "value3";
 
-Console.WriteLine($"Setting {value1Key} = '{initialValue1}' and {value2Key} = '{initialValue2}' at the same time...");
-await cacheService.SetAsync(value1Key, initialValue1, TimeSpan.FromSeconds(5));
-await cacheService.SetAsync(value2Key, initialValue2, TimeSpan.FromSeconds(5));
-await cacheService.SetAsync(value3Key, initialValue3, TimeSpan.FromSeconds(5));
+Console.WriteLine($"Initial {value1Key} = {await cacheService.TryGetValueAsync<string>(value1Key)}");
+Console.WriteLine($"Initial {value2Key} = {await cacheService.TryGetValueAsync<string>(value2Key)}");
+Console.WriteLine($"Initial {value3Key} = {await cacheService.TryGetValueAsync<string>(value3Key)}");
+
+Console.WriteLine($"\nSetting {value1Key} = '{initialValue1}' and {value2Key} = '{initialValue2}' at the same time...");
+await cacheService.SetAsync(value1Key, initialValue1);
+await cacheService.SetAsync(value2Key, initialValue2);
+await cacheService.SetAsync(value3Key, initialValue3);
 
 int value2UpdateCounter = 0;
 int value3UpdateCounter = 0;

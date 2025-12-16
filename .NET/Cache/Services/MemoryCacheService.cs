@@ -23,23 +23,25 @@ public class MemoryCacheService : ICacheService
         absoluteExpirationRelativeToNow ??= TryParseTimeSpan(_options.CacheLifetime, out TimeSpan ts)
             ? ts
             : _options.CacheLifeTimeSpan;
-        _memoryCache.Set(key, value, absoluteExpirationRelativeToNow.);
-        bool keyExists = _memoryCache.TryGetValue(key, out _);
-
-        if (keyExists)
-        {
-            _memoryCache.Set(key, value);
-            return Task.CompletedTask;
-        }
-
         if (absoluteExpirationRelativeToNow.Value < TimeSpan.FromSeconds(1))
             return Task.CompletedTask;
-
-        using var entry = _memoryCache.CreateEntry(key);
-        entry.Value = value;
-        entry.AbsoluteExpirationRelativeToNow = absoluteExpirationRelativeToNow.Value;
-
+        _memoryCache.Set(key, value, absoluteExpirationRelativeToNow.Value);
         return Task.CompletedTask;
+        //bool keyExists = _memoryCache.TryGetValue(key, out _);
+
+        //if (keyExists)
+        //{
+        //    _memoryCache.Set(key, value);
+        //    return Task.CompletedTask;
+        //}
+
+
+
+        //using var entry = _memoryCache.CreateEntry(key);
+        //entry.Value = value;
+        //entry.AbsoluteExpirationRelativeToNow = absoluteExpirationRelativeToNow.Value;
+
+        //return Task.CompletedTask;
     }
 
     public Task SetAsync<TItem>(string key, TItem value) =>
